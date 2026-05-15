@@ -196,8 +196,33 @@ export function useStore() {
   }, []);
 
   const logShot = useCallback((side: Side, position: Position, made: boolean) => {
-    appendEvent({ type: "shot", side, position, made } as any);
-  }, [appendEvent]);
+    setMatch((prev) => {
+      if (!prev) return prev;
+      const now = Date.now();
+      const events: GameEvent[] = [
+        ...prev.events,
+        { id: uid(), t: now, q: prev.currentQuarter, type: "shot", side, position, made },
+      ];
+      // On a made goal, append the next centre pass to the OPPOSITE side
+      // of the last centre pass. Netball rule: centres alternate after
+      // every goal, regardless of who scored.
+      if (made) {
+        let lastCp: Side | undefined;
+        for (let i = prev.events.length - 1; i >= 0; i--) {
+          const e = prev.events[i];
+          if (e.type === "centre_pass") { lastCp = e.side; break; }
+        }
+        const nextCp: Side = lastCp
+          ? (lastCp === "lhc" ? "opp" : "lhc")
+          : prev.coinTossWinner;
+        events.push({
+          id: uid(), t: now + 1, q: prev.currentQuarter,
+          type: "centre_pass", side: nextCp,
+        });
+      }
+      return { ...prev, events };
+    });
+  }, []);
 
   const logIntercept = useCallback((side: Side, position: Position) => {
     setMatch((prev) => {
