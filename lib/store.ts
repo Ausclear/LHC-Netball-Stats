@@ -200,12 +200,46 @@ export function useStore() {
   }, [appendEvent]);
 
   const logIntercept = useCallback((side: Side, position: Position) => {
-    appendEvent({ type: "intercept", side, position } as any);
-  }, [appendEvent]);
+    setMatch((prev) => {
+      if (!prev) return prev;
+      const events = [...prev.events];
+      // If the most recent possession event is for this same player, that
+      // possession was logged by the single-tap part of a double-tap (the
+      // user tapped a defender as they intercepted; we then opened the
+      // action menu via double-tap). Strip that bare possession and
+      // replace with intercept + possession in order, so stats credit
+      // the intercept properly.
+      const lastIdx = (() => {
+        for (let i = events.length - 1; i >= 0; i--) {
+          const e = events[i];
+          if (e.type === "possession") return i;
+          if (e.type === "shot" || e.type === "turnover_lost" || e.type === "centre_pass") return -1;
+        }
+        return -1;
+      })();
+      if (lastIdx >= 0) {
+        const last = events[lastIdx] as GameEvent & { type: "possession" };
+        if (last.side === side && last.position === position) {
+          events.splice(lastIdx, 1);
+        }
+      }
+      const t = Date.now();
+      events.push({ id: uid(), t, q: prev.currentQuarter, type: "intercept", side, position });
+      events.push({ id: uid(), t: t + 1, q: prev.currentQuarter, type: "possession", side, position });
+      return { ...prev, events };
+    });
+  }, []);
 
   const logDeflection = useCallback((side: Side, position: Position) => {
-    appendEvent({ type: "deflection", side, position } as any);
-  }, [appendEvent]);
+    setMatch((prev) => {
+      if (!prev) return prev;
+      const events = [...prev.events];
+      // Deflection: defender tipped it but possession may or may not still
+      // be with them. Just append the deflection event.
+      events.push({ id: uid(), t: Date.now(), q: prev.currentQuarter, type: "deflection", side, position });
+      return { ...prev, events };
+    });
+  }, []);
 
   const logTurnoverLost = useCallback((side: Side, position: Position) => {
     appendEvent({ type: "turnover_lost", side, position } as any);
@@ -253,6 +287,21 @@ export function useStore() {
     }
     return { ...m, votes: votes.first || votes.second ? votes : undefined };
   }), []);
+
+  const swapPositions = useCallback((posA: Position, posB: Position) => {
+    setMatch((m) => {
+      if (!m) return m;
+      const nameA = m.lineup[posA];
+      const nameB = m.lineup[posB];
+      const lineup: Lineup = { ...m.lineup, [posA]: nameB, [posB]: nameA };
+      const events = [...m.events];
+      const matchStarted = m.events.some((e) => e.type === "match_start");
+      if (matchStarted) {
+        events.push({ id: uid(), t: Date.now(), q: m.currentQuarter, type: "lineup", lineup });
+      }
+      return { ...m, lineup, events };
+    });
+  }, []);
 
   // ----------------------------------------------------------------
   // Reset & finish
@@ -352,6 +401,7 @@ export function useStore() {
     startMatch, pauseMatch, advanceQuarter, finishMatch, resetMatch,
     tapPlayer, logShot, logIntercept, logDeflection, logTurnoverLost, logPenalty,
     setLhcName, setOppName, setLineup, setCaptain, setCoinTossWinner, setVote,
+    swapPositions,
     removeEvent,
     squadAddPlayer, squadRemovePlayer, squadUpdatePlayer, squadSetTeamName,
     divSetName, divAddTeam, divRemoveTeam, divAddManual, divRemoveManual,

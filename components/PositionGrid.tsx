@@ -16,6 +16,7 @@ export function PositionGrid({
   isTracked,
   isLive,
   pendingCentrePass,
+  cpTaker,
   captainName,
   onTap,
   onDoubleTap,
@@ -24,11 +25,12 @@ export function PositionGrid({
   side: Side;
   teamName: string;
   stats: SideStats;
-  lineup?: Record<Position, string>; // only LHC has names
+  lineup?: Record<Position, string>;
   currentPossession?: { side: Side; position: Position };
   isTracked: boolean;
   isLive: boolean;
   pendingCentrePass: boolean;
+  cpTaker?: { side: Side; position: Position; at: number };
   captainName?: string;
   onTap: (side: Side, p: Position) => void;
   onDoubleTap: (side: Side, p: Position) => void;
@@ -73,6 +75,7 @@ export function PositionGrid({
           const shotsMade = stats.byPosition[p].shotsMade;
           const intercepts = stats.byPosition[p].intercepts;
           const isCaptain = !!captainName && !!name && captainName.toLowerCase() === name.toLowerCase();
+          const isCpTaker = !!cpTaker && cpTaker.side === side && cpTaker.position === p && Date.now() - cpTaker.at < 3500;
           return (
             <Btn
               key={p}
@@ -83,6 +86,7 @@ export function PositionGrid({
               isLive={isLive}
               isShooter={isShooter}
               isCaptain={isCaptain}
+              isCpTaker={isCpTaker}
               possessionMs={ms}
               shotsMade={shotsMade}
               intercepts={intercepts}
@@ -97,11 +101,11 @@ export function PositionGrid({
 }
 
 function Btn({
-  position, playerName, isActive, isTracked, isLive, isShooter, isCaptain,
+  position, playerName, isActive, isTracked, isLive, isShooter, isCaptain, isCpTaker,
   possessionMs, shotsMade, intercepts, onTap, onDoubleTap,
 }: {
   position: Position; playerName?: string; isActive: boolean; isTracked: boolean;
-  isLive: boolean; isShooter: boolean; isCaptain: boolean;
+  isLive: boolean; isShooter: boolean; isCaptain: boolean; isCpTaker: boolean;
   possessionMs: number; shotsMade: number; intercepts: number;
   onTap: () => void; onDoubleTap: () => void;
 }) {
@@ -169,6 +173,11 @@ function Btn({
       {isCaptain && (
         <span className="absolute -top-1.5 -right-1.5 w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center bg-emerald-400 text-emerald-950 ring-2 ring-navy-dark">
           C
+        </span>
+      )}
+      {isCpTaker && (
+        <span className="absolute inset-x-0 -bottom-2 mx-auto w-fit px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider bg-amber-400 text-navy-dark ring-2 ring-navy-dark whitespace-nowrap animate-cp">
+          ✦ CP
         </span>
       )}
     </button>

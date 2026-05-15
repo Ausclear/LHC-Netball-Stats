@@ -42,8 +42,15 @@ export interface Derived {
   opp: SideStats;
   byQuarter: Record<Quarter, { lhcGoals: number; oppGoals: number }>;
   lastGoal?: { side: Side; position: Position; at: number };
-  // Whose centre pass is currently pending (and not yet taken)?
   pendingCentrePass?: Side;
+  // Time accumulated in each court third (only LHC perspective —
+  // attack = LHC shooters' end, centre = midcourt, defence = LHC GD/GK end)
+  byThird: { lhcAttack: number; centre: number; lhcDefence: number };
+  // Centre pass conversion: how many centre passes for each side were
+  // converted directly into a goal before the other side touched the ball.
+  cpConversion: { lhcMade: number; lhcTotal: number; oppMade: number; oppTotal: number };
+  // The most recent CP taker (so the live UI can flash their button)
+  cpTaker?: { side: Side; position: Position; at: number };
 }
 
 function emptyLine(name: string): PlayerLine {
@@ -105,6 +112,19 @@ export function deriveStats(state: MatchState, nowMs: number = Date.now()): Deri
   };
   let lastGoal: Derived["lastGoal"];
   let pendingCentrePass: Side | undefined;
+  let cpTaker: Derived["cpTaker"];
+
+  // Court third lookup from position (LHC-relative)
+  const thirdOf = (p: Position): "attack" | "centre" | "defence" => {
+    if (p === "GS" || p === "GA") return "attack";
+    if (p === "GD" || p === "GK") return "defence";
+    return "centre";
+  };
+  const byThird = { lhcAttack: 0, centre: 0, lhcDefence: 0 };
+
+  // CP conversion tracking
+  const cpConversion = { lhcMade: 0, lhcTotal: 0, oppMade: 0, oppTotal: 0 };
+  let cpInProgress: Side | undefined;
 
   // Track current LHC lineup as we walk events.
   // Opposition has no names tracked.
@@ -127,6 +147,18 @@ export function deriveStats(state: MatchState, nowMs: number = Date.now()): Deri
       const p = ensurePlayer(s, open.playerName, open.position);
       if (p) p.possessionMs += duration;
     }
+    // Credit the court third (LHC perspective)
+    const t = thirdOf(open.position);
+    if (open.side === "lhc") {
+      if (t === "attack") byThird.lhcAttack += duration;
+      else if (t === "defence") byThird.lhcDefence += duration;
+      else byThird.centre += duration;
+    } else {
+      // Opposition's attack = LHC's defence (mirrored)
+      if (t === "attack") byThird.lhcDefence += duration;
+      else if (t === "defence") byThird.lhcAttack += duration;
+      else byThird.centre += duration;
+    }
     open = null;
   };
 
@@ -138,14 +170,25 @@ export function deriveStats(state: MatchState, nowMs: number = Date.now()): Deri
       case "centre_pass": {
         (e.side === "lhc" ? lhc : opp).centrePasses += 1;
         pendingCentrePass = e.side;
+        cpInProgress = e.side;
+        if (e.side === "lhc") cpConversion.lhcTotal += 1;
+        else cpConversion.oppTotal += 1;
+        cpTaker = undefined; // reset until we see the taker
         break;
       }
       case "possession": {
         closeSpan(e.t);
         const playerName = e.side === "lhc" ? currentLineup[e.position] || "" : "";
         open = { side: e.side, position: e.position, t: e.t, playerName };
+        // If a centre pass is pending and this possession is for the
+        // holding side, this is the centre pass taker.
+        if (pendingCentrePass === e.side && !cpTaker) {
+          cpTaker = { side: e.side, position: e.position, at: e.t };
+        }
         // A possession event on the centre-pass-holding side resolves the pending CP
         if (pendingCentrePass === e.side) pendingCentrePass = undefined;
+        // If a CP is in progress and the OTHER side gets the ball, the CP was lost
+        if (cpInProgress && cpInProgress !== e.side) cpInProgress = undefined;
         break;
       }
       case "pass": {
@@ -174,6 +217,13 @@ export function deriveStats(state: MatchState, nowMs: number = Date.now()): Deri
               if (p) p.shotsMade += 1;
             }
           }
+          // CP conversion: if a centre pass was still in progress for THIS
+          // side and they just scored, count it as a made conversion.
+          if (cpInProgress === e.side) {
+            if (e.side === "lhc") cpConversion.lhcMade += 1;
+            else cpConversion.oppMade += 1;
+          }
+          cpInProgress = undefined;
           lastGoal = { side: e.side, position: e.position, at: e.t };
           closeSpan(e.t);
         } else {
@@ -202,6 +252,8 @@ export function deriveStats(state: MatchState, nowMs: number = Date.now()): Deri
             if (p) p.intercepts += 1;
           }
         }
+        // If the CP holder just lost the ball, CP conversion fails
+        if (cpInProgress && cpInProgress !== e.side) cpInProgress = undefined;
         break;
       }
       case "deflection": {
@@ -230,6 +282,7 @@ export function deriveStats(state: MatchState, nowMs: number = Date.now()): Deri
             if (p) p.turnoversLost += 1;
           }
         }
+        if (cpInProgress === e.side) cpInProgress = undefined;
         closeSpan(e.t);
         break;
       }
@@ -269,7 +322,7 @@ export function deriveStats(state: MatchState, nowMs: number = Date.now()): Deri
     if (name) lhc.byPosition[pos].name = name;
   }
 
-  return { lhc, opp, byQuarter, lastGoal, pendingCentrePass };
+  return { lhc, opp, byQuarter, lastGoal, pendingCentrePass, byThird, cpConversion, cpTaker };
 }
 
 export function fmtMs(ms: number): string {

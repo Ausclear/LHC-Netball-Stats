@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Derived, fmtMs, pomScore } from "@/lib/stats";
 import { Division, MatchState, Position, SavedMatch } from "@/lib/types";
 import { LadderRow, buildBestAndFairest, buildLadder, buildSeasonPlayerTotals } from "@/lib/season";
+import { downloadFile, exportEventsCsv, exportSummaryCsv } from "@/lib/export";
 
 type Tab = "match" | "players" | "season" | "ladder";
 
@@ -151,6 +152,28 @@ function MatchTab({ match, derived, onSetVote, squadPlayers }: { match: MatchSta
         </div>
       </Card>
 
+      <Card title="Time by Court Third (LHC perspective)">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <ThirdStat label="LHC Attack" value={fmtMs(derived.byThird.lhcAttack)} accent="gold" />
+          <ThirdStat label="Centre" value={fmtMs(derived.byThird.centre)} />
+          <ThirdStat label="LHC Defence" value={fmtMs(derived.byThird.lhcDefence)} accent="red" />
+        </div>
+      </Card>
+
+      <Card title="Centre Pass Conversion">
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <Stat label={match.lhcName}
+            value={`${derived.cpConversion.lhcMade}/${derived.cpConversion.lhcTotal}`}
+            accent="gold" />
+          <Stat label={match.oppName}
+            value={`${derived.cpConversion.oppMade}/${derived.cpConversion.oppTotal}`}
+            accent="red" />
+        </div>
+        <div className="text-[10px] text-cream/40 mt-2 leading-relaxed">
+          Centre passes converted directly into a goal (before the other side touched the ball).
+        </div>
+      </Card>
+
       <Card title="Possession & Turnovers">
         <div className="grid grid-cols-2 gap-2 text-sm">
           <Stat label={`Possession (${match.lhcName})`} value={fmtMs(derived.lhc.possessionMs)} />
@@ -159,6 +182,17 @@ function MatchTab({ match, derived, onSetVote, squadPlayers }: { match: MatchSta
           <Stat label="Turnovers Lost" value={String(derived.lhc.turnoversLost)} accent="red" />
         </div>
       </Card>
+
+      <div className="grid grid-cols-2 gap-2 pt-2">
+        <button onClick={() => downloadFile(`lhc-summary-${new Date(match.createdAt).toISOString().slice(0, 10)}.csv`, exportSummaryCsv(match))}
+          className="bg-navy border border-gold/40 text-gold py-3 rounded-lg text-xs uppercase tracking-widest font-bold">
+          ↓ Summary CSV
+        </button>
+        <button onClick={() => downloadFile(`lhc-events-${new Date(match.createdAt).toISOString().slice(0, 10)}.csv`, exportEventsCsv(match))}
+          className="bg-navy border border-gold/40 text-gold py-3 rounded-lg text-xs uppercase tracking-widest font-bold">
+          ↓ Event Log CSV
+        </button>
+      </div>
     </>
   );
 }
@@ -248,6 +282,44 @@ function SeasonTab({ saved, onRemoveSaved }: { saved: SavedMatch[]; onRemoveSave
                 <div className={`font-display text-2xl tabular-nums ${i === 0 ? "text-gold" : "text-cream/80"}`}>{row.pts}</div>
               </div>
             ))}
+            <div className="text-[9px] text-cream/40 pt-1">2 pts best on court · 1 pt second</div>
+          </div>
+        </Card>
+      )}
+      {matchesWithVotes.length > 0 && bf.length > 0 && (
+        <Card title="Votes — Round by Round">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="text-[9px] uppercase tracking-widest text-gold/70">
+                  <th className="text-left py-1 pr-2 sticky left-0 bg-navy/60 z-10">Player</th>
+                  {matchesWithVotes.map((m, i) => (
+                    <th key={m.id} className="text-center px-1 min-w-[44px]" title={`Round ${i + 1} vs ${m.oppName}`}>R{i + 1}</th>
+                  ))}
+                  <th className="text-right pl-2 sticky right-0 bg-navy/60">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bf.map((row, i) => (
+                  <tr key={row.name} className={`border-t border-white/5 ${i === 0 ? "bg-gold/5" : ""}`}>
+                    <td className={`py-1.5 pr-2 sticky left-0 bg-navy/60 z-10 font-bold ${i === 0 ? "text-gold" : "text-cream"}`}>
+                      {row.name}
+                    </td>
+                    {matchesWithVotes.map((m) => {
+                      const pts = m.votes?.first === row.name ? 2 : m.votes?.second === row.name ? 1 : 0;
+                      return (
+                        <td key={m.id} className={`text-center px-1 font-mono tabular-nums ${
+                          pts === 2 ? "text-gold font-bold" : pts === 1 ? "text-gold/70" : "text-cream/15"
+                        }`}>{pts || "·"}</td>
+                      );
+                    })}
+                    <td className={`text-right pl-2 font-mono tabular-nums font-bold sticky right-0 bg-navy/60 ${i === 0 ? "text-gold" : "text-cream"}`}>
+                      {row.pts}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Card>
       )}
@@ -487,6 +559,19 @@ function Stat({ label, value, accent = "gold" as "gold" | "red" }: { label: stri
     </div>
   );
 }
+function ThirdStat({ label, value, accent }: { label: string; value: string; accent?: "gold" | "red" }) {
+  return (
+    <div className={`rounded-md p-2 border ${
+      accent === "gold" ? "bg-gold/10 border-gold/30" :
+      accent === "red" ? "bg-red-500/10 border-red-400/30" :
+      "bg-navy/40 border-white/10"
+    }`}>
+      <div className="text-[9px] uppercase tracking-widest text-cream/50">{label}</div>
+      <div className={`font-mono tabular-nums text-lg ${accent === "gold" ? "text-gold" : accent === "red" ? "text-red-300" : "text-cream"}`}>{value}</div>
+    </div>
+  );
+}
+
 function SmallStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-navy/40 rounded-md p-2">
