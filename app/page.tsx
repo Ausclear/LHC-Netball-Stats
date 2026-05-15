@@ -12,7 +12,6 @@ import { Setup } from "@/components/Setup";
 import { Stats } from "@/components/Stats";
 import { FixSheet } from "@/components/FixSheet";
 import { GoalToast } from "@/components/GoalToast";
-import { FloatingShotButton } from "@/components/FloatingShotButton";
 import { SwapSheet } from "@/components/SwapSheet";
 import { QuarterLineupSheet } from "@/components/QuarterLineupSheet";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -311,16 +310,6 @@ export default function Page() {
       )}
 
       <GoalToast lastGoal={derived.lastGoal} teamName={lastGoalTeamName} isTracked={!!lastGoalIsTracked} playerName={lastGoalPlayerName} />
-
-      {s.match.running &&
-        currentPossession &&
-        SHOOTERS.includes(currentPossession.position) && (
-          <FloatingShotButton
-            side={currentPossession.side}
-            onGoal={() => s.logShot(currentPossession.side, currentPossession.position, true)}
-            onMiss={() => s.logShot(currentPossession.side, currentPossession.position, false)}
-          />
-        )}
 
       {swapOpen && (
         <SwapSheet
