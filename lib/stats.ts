@@ -330,20 +330,49 @@ export function deriveStats(state: MatchState, nowMs: number = Date.now()): Deri
   //   - Q2/Q4 first centre → the other team
   //   - Then alternates with every goal
   //
-  // Only apply the fallback when there's no active possession (i.e.
-  // the ball is "in flight" between events) and the match has started.
+  // Only apply the fallback when no one currently has the ball — i.e.
+  // the most recent meaningful event is a goal, the match just started,
+  // or a quarter just started. If a possession event is the most recent,
+  // someone already took (and is still holding) the centre, so no centre
+  // is pending.
   const matchStarted = state.events.some((e) => e.type === "match_start");
-  if (!pendingCentrePass && matchStarted && !open) {
-    const winner = state.coinTossWinner;
-    const other: Side = winner === "lhc" ? "opp" : "lhc";
-    const q = state.currentQuarter;
-    const qStarter: Side = q === 1 || q === 3 ? winner : other;
-    // Count goals in current quarter so far
-    const goalsThisQ = state.events.filter(
-      (e) => e.type === "shot" && e.q === q && e.made
-    ).length;
-    // After each goal, centre alternates from the quarter starter
-    pendingCentrePass = goalsThisQ % 2 === 0 ? qStarter : (qStarter === "lhc" ? "opp" : "lhc");
+  if (!pendingCentrePass && matchStarted) {
+    // Find the most recent meaningful event
+    let mostRecentMeaningful: GameEvent | undefined;
+    for (let i = state.events.length - 1; i >= 0; i--) {
+      const e = state.events[i];
+      if (
+        e.type === "possession" ||
+        e.type === "shot" ||
+        e.type === "turnover_lost" ||
+        e.type === "intercept" ||
+        e.type === "quarter_start" ||
+        e.type === "match_start"
+      ) {
+        mostRecentMeaningful = e;
+        break;
+      }
+    }
+    // A centre is pending only if play has reset (goal, quarter start, match start)
+    // and nobody has touched the ball since.
+    const centreIsPending =
+      !mostRecentMeaningful ||
+      mostRecentMeaningful.type === "quarter_start" ||
+      mostRecentMeaningful.type === "match_start" ||
+      (mostRecentMeaningful.type === "shot" && mostRecentMeaningful.made);
+
+    if (centreIsPending) {
+      const winner = state.coinTossWinner;
+      const other: Side = winner === "lhc" ? "opp" : "lhc";
+      const q = state.currentQuarter;
+      const qStarter: Side = q === 1 || q === 3 ? winner : other;
+      // Count goals in current quarter so far
+      const goalsThisQ = state.events.filter(
+        (e) => e.type === "shot" && e.q === q && e.made
+      ).length;
+      // After each goal, centre alternates from the quarter starter
+      pendingCentrePass = goalsThisQ % 2 === 0 ? qStarter : (qStarter === "lhc" ? "opp" : "lhc");
+    }
   }
 
   return { lhc, opp, byQuarter, lastGoal, pendingCentrePass, byThird, cpConversion, cpTaker };
