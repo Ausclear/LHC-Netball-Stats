@@ -322,6 +322,30 @@ export function deriveStats(state: MatchState, nowMs: number = Date.now()): Deri
     if (name) lhc.byPosition[pos].name = name;
   }
 
+  // Fallback for pendingCentrePass when the event log doesn't have an
+  // explicit centre_pass event yet (older matches saved before that
+  // event was emitted, or edge cases). Centres alternate strictly:
+  //
+  //   - Q1/Q3 first centre → coin toss winner
+  //   - Q2/Q4 first centre → the other team
+  //   - Then alternates with every goal
+  //
+  // Only apply the fallback when there's no active possession (i.e.
+  // the ball is "in flight" between events) and the match has started.
+  const matchStarted = state.events.some((e) => e.type === "match_start");
+  if (!pendingCentrePass && matchStarted && !open) {
+    const winner = state.coinTossWinner;
+    const other: Side = winner === "lhc" ? "opp" : "lhc";
+    const q = state.currentQuarter;
+    const qStarter: Side = q === 1 || q === 3 ? winner : other;
+    // Count goals in current quarter so far
+    const goalsThisQ = state.events.filter(
+      (e) => e.type === "shot" && e.q === q && e.made
+    ).length;
+    // After each goal, centre alternates from the quarter starter
+    pendingCentrePass = goalsThisQ % 2 === 0 ? qStarter : (qStarter === "lhc" ? "opp" : "lhc");
+  }
+
   return { lhc, opp, byQuarter, lastGoal, pendingCentrePass, byThird, cpConversion, cpTaker };
 }
 
