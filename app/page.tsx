@@ -12,6 +12,7 @@ import { Setup } from "@/components/Setup";
 import { Stats } from "@/components/Stats";
 import { FixSheet } from "@/components/FixSheet";
 import { GoalToast } from "@/components/GoalToast";
+import { FloatingShotButton } from "@/components/FloatingShotButton";
 
 type Screen = "track" | "setup" | "stats";
 
@@ -203,6 +204,16 @@ export default function Page() {
       )}
 
       <GoalToast lastGoal={derived.lastGoal} teamName={lastGoalTeamName} isTracked={!!lastGoalIsTracked} playerName={lastGoalPlayerName} />
+
+      {s.match.running &&
+        currentPossession &&
+        SHOOTERS.includes(currentPossession.position) && (
+          <FloatingShotButton
+            side={currentPossession.side}
+            onGoal={() => s.logShot(currentPossession.side, currentPossession.position, true)}
+            onMiss={() => s.logShot(currentPossession.side, currentPossession.position, false)}
+          />
+        )}
     </main>
   );
 }
