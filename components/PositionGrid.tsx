@@ -49,11 +49,6 @@ export function PositionGrid({
             {teamName.toUpperCase()}
           </div>
           {isTracked && <div className="text-[8px] uppercase tracking-widest text-gold/60 font-bold">★ YOURS</div>}
-          {pendingCentrePass && (
-            <div className="text-[8px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded bg-amber-400 text-navy-dark whitespace-nowrap animate-cp">
-              ✦ CENTRE PASS
-            </div>
-          )}
         </div>
         <div className="flex items-center gap-2 ml-2">
           <div className="text-[9px] uppercase tracking-widest text-cream/40 font-mono tabular-nums whitespace-nowrap">
@@ -186,7 +181,7 @@ function Btn({
         </span>
       )}
       {isPendingCp && (
-        <span className="absolute inset-x-0 -top-2.5 mx-auto w-fit px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider bg-amber-400 text-navy-dark ring-2 ring-navy-dark whitespace-nowrap">
+        <span className="absolute inset-x-0 -top-2.5 mx-auto w-fit px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider bg-amber-400 text-navy-dark ring-2 ring-navy-dark whitespace-nowrap z-20">
           ✦ TAKE CP
         </span>
       )}
