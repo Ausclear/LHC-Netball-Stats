@@ -148,7 +148,7 @@ function Btn({
         min-h-[76px] touch-none
         ${isLive ? "active:scale-95" : "opacity-40 grayscale"}
         ${isActive ? activeClass : baseClass}
-        ${isPendingCp && !isActive ? "ring-4 ring-amber-400 ring-offset-2 ring-offset-navy-dark animate-cp" : ""}
+        ${isPendingCp && !isActive ? "ring-4 ring-amber-400 ring-offset-2 ring-offset-navy-dark animate-cp z-30" : ""}
       `}
     >
       <span className="font-display text-xl leading-none tracking-wider">{position}</span>
