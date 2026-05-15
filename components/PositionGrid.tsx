@@ -76,6 +76,9 @@ export function PositionGrid({
           const intercepts = stats.byPosition[p].intercepts;
           const isCaptain = !!captainName && !!name && captainName.toLowerCase() === name.toLowerCase();
           const isCpTaker = !!cpTaker && cpTaker.side === side && cpTaker.position === p && Date.now() - cpTaker.at < 3500;
+          // The C card on the team that owns a pending centre pass should
+          // pulse to show whose turn it is — the centre always takes it.
+          const isPendingCp = pendingCentrePass && p === "C";
           return (
             <Btn
               key={p}
@@ -87,6 +90,7 @@ export function PositionGrid({
               isShooter={isShooter}
               isCaptain={isCaptain}
               isCpTaker={isCpTaker}
+              isPendingCp={!!isPendingCp}
               possessionMs={ms}
               shotsMade={shotsMade}
               intercepts={intercepts}
@@ -101,11 +105,11 @@ export function PositionGrid({
 }
 
 function Btn({
-  position, playerName, isActive, isTracked, isLive, isShooter, isCaptain, isCpTaker,
+  position, playerName, isActive, isTracked, isLive, isShooter, isCaptain, isCpTaker, isPendingCp,
   possessionMs, shotsMade, intercepts, onTap, onDoubleTap,
 }: {
   position: Position; playerName?: string; isActive: boolean; isTracked: boolean;
-  isLive: boolean; isShooter: boolean; isCaptain: boolean; isCpTaker: boolean;
+  isLive: boolean; isShooter: boolean; isCaptain: boolean; isCpTaker: boolean; isPendingCp: boolean;
   possessionMs: number; shotsMade: number; intercepts: number;
   onTap: () => void; onDoubleTap: () => void;
 }) {
@@ -149,6 +153,7 @@ function Btn({
         min-h-[76px] touch-none
         ${isLive ? "active:scale-95" : "opacity-40 grayscale"}
         ${isActive ? activeClass : baseClass}
+        ${isPendingCp && !isActive ? "ring-4 ring-amber-400 ring-offset-2 ring-offset-navy-dark animate-cp" : ""}
       `}
     >
       <span className="font-display text-xl leading-none tracking-wider">{position}</span>
@@ -178,6 +183,11 @@ function Btn({
       {isCpTaker && (
         <span className="absolute inset-x-0 -bottom-2 mx-auto w-fit px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider bg-amber-400 text-navy-dark ring-2 ring-navy-dark whitespace-nowrap animate-cp">
           ✦ CP
+        </span>
+      )}
+      {isPendingCp && (
+        <span className="absolute inset-x-0 -top-2.5 mx-auto w-fit px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider bg-amber-400 text-navy-dark ring-2 ring-navy-dark whitespace-nowrap">
+          ✦ TAKE CP
         </span>
       )}
     </button>
