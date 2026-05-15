@@ -16,6 +16,7 @@ import { FloatingShotButton } from "@/components/FloatingShotButton";
 import { SwapSheet } from "@/components/SwapSheet";
 import { QuarterLineupSheet } from "@/components/QuarterLineupSheet";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { QuickActionBar } from "@/components/QuickActionBar";
 
 type Screen = "track" | "setup" | "stats";
 
@@ -245,11 +246,45 @@ export default function Page() {
         />
       </div>
 
+      {/* Context-aware quick-action bar — sits below the opposition grid
+          and operates on whichever player currently has the ball. */}
+      {s.match.running && (
+        <QuickActionBar
+          side={currentPossession?.side}
+          position={currentPossession?.position}
+          playerName={
+            currentPossession?.side === "lhc"
+              ? s.match.lineup[currentPossession.position]
+              : undefined
+          }
+          teamName={
+            currentPossession?.side === "lhc"
+              ? s.match.lhcName
+              : currentPossession?.side === "opp"
+              ? s.match.oppName
+              : undefined
+          }
+          centrePassHint={
+            !currentPossession && derived.pendingCentrePass
+              ? `${derived.pendingCentrePass === "lhc" ? s.match.lhcName : s.match.oppName} to take centre pass`
+              : undefined
+          }
+          onAction={(kind) => {
+            if (!currentPossession) return;
+            const { side, position } = currentPossession;
+            if (kind === "goal") s.logShot(side, position, true);
+            else if (kind === "miss") s.logShot(side, position, false);
+            else if (kind === "turnover") s.logTurnoverLost(side, position);
+            else if (kind === "penalty") s.logPenalty(side, position);
+          }}
+        />
+      )}
+
       <footer className="border-t border-gold/30 bg-navy py-2 px-3 text-[10px] uppercase tracking-widest text-cream/50 text-center">
         {s.match.running ? (
           <div className="grid grid-cols-2 gap-2">
             <div><span className="text-gold font-bold">TAP</span> = they have the ball</div>
-            <div><span className="text-gold font-bold">DOUBLE-TAP</span> = action menu</div>
+            <div><span className="text-gold font-bold">QUICK BAR</span> ↓ = log action</div>
           </div>
         ) : (
           <div className="text-red-300">⏸ Paused — tap <span className="text-emerald-300 font-bold">START</span> in the top bar</div>
