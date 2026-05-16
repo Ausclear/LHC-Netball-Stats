@@ -2,68 +2,79 @@
 
 import { Position, SHOOTERS, Side } from "@/lib/types";
 
-export type QuickAction = "goal" | "miss" | "turnover" | "penalty";
+export type QuickAction = "goal" | "miss" | "turnover" | "penalty" | "intercept_pick" | "deflection_pick";
 
-/**
- * A persistent context-aware action bar shown below the live court when
- * the match is running. Avoids the need to double-tap into a sheet for
- * the common attacking events:
- *   - When a shooter has the ball: GOAL, MISS, LOST IT, PENALTY
- *   - When a non-shooter has the ball: LOST IT, PENALTY (plus a hint
- *     to double-tap a defender for intercept/deflection)
- *
- * Each button acts on whichever player currently has the ball. If no
- * one has the ball, the bar collapses to a centre-pass hint.
- */
 export function QuickActionBar({
   side,
   position,
   playerName,
   teamName,
   centrePassHint,
+  pickMode,
   onAction,
+  onCancelPick,
 }: {
-  // Side/position of the player currently in possession (or undefined if
-  // no one is). When undefined, the bar shows the centre-pass hint or
-  // nothing.
   side?: Side;
   position?: Position;
   playerName?: string;
   teamName?: string;
   centrePassHint?: string;
+  pickMode?: "intercept" | "deflection" | null;
   onAction: (kind: QuickAction) => void;
+  onCancelPick?: () => void;
 }) {
+  // Pick mode: highest priority — show big banner asking for the player
+  if (pickMode) {
+    return (
+      <div className="px-2.5 pb-1">
+        <div className="bg-emerald-500/15 border-2 border-emerald-400/60 rounded-lg p-3 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-widest text-emerald-200 font-bold">
+              {pickMode === "intercept" ? "✋ Intercept" : "↗ Deflection"} — pick the player
+            </div>
+            <div className="text-xs text-cream/70 mt-0.5">
+              Tap whichever player made the {pickMode}
+            </div>
+          </div>
+          {onCancelPick && (
+            <button onClick={onCancelPick}
+              className="px-3 py-2 rounded-md bg-navy border border-white/20 text-cream/70 text-[10px] uppercase tracking-widest font-bold">
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // No one has the ball
   if (!side || !position) {
-    if (centrePassHint) {
-      return (
-        <div className="px-2.5 pb-1">
+    return (
+      <div className="px-2.5 pb-1 space-y-1.5">
+        {centrePassHint ? (
           <div className="bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2 text-center">
             <span className="text-[10px] uppercase tracking-widest text-amber-300 font-bold">
               ✦ {centrePassHint}
             </span>
           </div>
-        </div>
-      );
-    }
-    return (
-      <div className="px-2.5 pb-1">
-        <div className="bg-navy/40 border border-white/5 rounded-lg px-3 py-2 text-center">
-          <span className="text-[10px] uppercase tracking-widest text-cream/40">
-            Tap a player to log possession
-          </span>
-        </div>
+        ) : (
+          <div className="bg-navy/40 border border-white/5 rounded-lg px-3 py-2 text-center">
+            <span className="text-[10px] uppercase tracking-widest text-cream/40">
+              Tap a player to log possession
+            </span>
+          </div>
+        )}
+        <DefensiveActions onAction={onAction} />
       </div>
     );
   }
 
   const isLhc = side === "lhc";
   const isShooter = SHOOTERS.includes(position);
-
-  // Label colour cues: gold for LHC, rose for opposition.
   const accent = isLhc ? "text-gold" : "text-red-300";
 
   return (
-    <div className="px-2.5 pb-1">
+    <div className="px-2.5 pb-1 space-y-1.5">
       <div className={`rounded-lg border p-2 ${isLhc ? "bg-gold/5 border-gold/30" : "bg-red-500/5 border-red-400/30"}`}>
         <div className="flex items-baseline justify-between mb-1.5 px-1">
           <div className="text-[9px] uppercase tracking-widest text-cream/50 truncate">
@@ -71,7 +82,7 @@ export function QuickActionBar({
             {playerName && <span className="text-cream/70"> · {playerName}</span>}
           </div>
           <div className="text-[8px] uppercase tracking-widest text-cream/30">
-            Quick log
+            Has the ball
           </div>
         </div>
         {isShooter ? (
@@ -87,20 +98,36 @@ export function QuickActionBar({
             <Btn label="PENALTY" tone="rose"  onClick={() => onAction("penalty")} />
           </div>
         )}
-        {!isShooter && (
-          <div className="text-[9px] text-cream/40 text-center mt-1.5">
-            For intercept / deflection · double-tap the defender
-          </div>
-        )}
+      </div>
+      <DefensiveActions onAction={onAction} />
+    </div>
+  );
+}
+
+function DefensiveActions({ onAction }: { onAction: (k: QuickAction) => void }) {
+  return (
+    <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 p-2">
+      <div className="flex items-center justify-between mb-1.5 px-1">
+        <div className="text-[9px] uppercase tracking-widest text-cream/50">
+          Defensive action
+        </div>
+        <div className="text-[8px] uppercase tracking-widest text-cream/30">
+          Tap, then pick player
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <Btn label="INTERCEPT"  tone="emerald" onClick={() => onAction("intercept_pick")} />
+        <Btn label="DEFLECTION" tone="teal"    onClick={() => onAction("deflection_pick")} />
       </div>
     </div>
   );
 }
 
-function Btn({ label, tone, onClick }: { label: string; tone: "emerald" | "rose" | "amber"; onClick: () => void }) {
+function Btn({ label, tone, onClick }: { label: string; tone: "emerald" | "rose" | "amber" | "teal"; onClick: () => void }) {
   const toneClass =
     tone === "emerald" ? "bg-emerald-500 text-emerald-950 border-emerald-300 active:bg-emerald-400" :
     tone === "rose"    ? "bg-rose-500 text-white border-rose-300 active:bg-rose-400" :
+    tone === "teal"    ? "bg-teal-500 text-teal-950 border-teal-300 active:bg-teal-400" :
                          "bg-amber-500 text-amber-950 border-amber-300 active:bg-amber-400";
   return (
     <button

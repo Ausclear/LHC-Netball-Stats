@@ -7,7 +7,6 @@ import { POSITIONS, Position, Quarter, SHOOTERS, Side } from "@/lib/types";
 import { TopBar } from "@/components/TopBar";
 import { Scoreboard } from "@/components/Scoreboard";
 import { PositionGrid } from "@/components/PositionGrid";
-import { ActionSheet, ActionKind } from "@/components/ActionSheet";
 import { Setup } from "@/components/Setup";
 import { Stats } from "@/components/Stats";
 import { FixSheet } from "@/components/FixSheet";
@@ -22,11 +21,11 @@ type Screen = "track" | "setup" | "stats";
 export default function Page() {
   const s = useStore();
   const [screen, setScreen] = useState<Screen>("track");
-  const [actionFor, setActionFor] = useState<{ side: Side; position: Position } | null>(null);
   const [fixOpen, setFixOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [quarterSheet, setQuarterSheet] = useState<Quarter | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [pickMode, setPickMode] = useState<"intercept" | "deflection" | null>(null);
 
   if (!s.match || !s.squad || !s.division) {
     return <main className="min-h-screen flex items-center justify-center text-cream/50">Loading…</main>;
@@ -128,67 +127,28 @@ export default function Page() {
 
   // LIVE TRACKING -------------------------------------------------------
   const handleTap = (side: Side, position: Position) => {
+    if (!s.match!.running) return;
+    if (pickMode === "intercept") {
+      s.logIntercept(side, position);
+      setPickMode(null);
+      return;
+    }
+    if (pickMode === "deflection") {
+      s.logDeflection(side, position);
+      setPickMode(null);
+      return;
+    }
     s.tapPlayer(side, position);
   };
-  const handleDoubleTap = (side: Side, position: Position) => {
-    if (!s.match!.running) return;
-    setActionFor({ side, position });
-  };
-
-  const handleAction = (kind: ActionKind) => {
-    if (!actionFor) return;
-    const { side, position } = actionFor;
-    switch (kind) {
-      case "goal": s.logShot(side, position, true); break;
-      case "miss": s.logShot(side, position, false); break;
-      case "intercept": s.logIntercept(side, position); break;
-      case "deflection": s.logDeflection(side, position); break;
-      case "turnover": s.logTurnoverLost(side, position); break;
-      case "penalty": s.logPenalty(side, position); break;
-    }
-    setActionFor(null);
-  };
+  // Kept as a no-op so PositionGrid's existing double-tap prop still wires.
+  // We never open the action sheet anymore.
+  const handleDoubleTap = (_side: Side, _position: Position) => {};
 
   const onFinish = () => {
     if (s.match!.currentQuarter < 4) return;
     s.finishMatch(derived.lhc.goals, derived.opp.goals);
     setScreen("stats");
   };
-
-  const actionTeamName = actionFor?.side === "lhc" ? s.match.lhcName : s.match.oppName;
-  const actionPlayerName = actionFor?.side === "lhc" ? s.match.lineup[actionFor.position] : undefined;
-  const actionHasPossession = !!actionFor && currentPossession?.side === actionFor.side && currentPossession?.position === actionFor.position;
-
-  // "Just stole" detection: tapped player has possession now, but the
-  // PREVIOUS possession (the one before the most recent) was the other team.
-  // i.e., this player just took the ball off the opposition within the last
-  // few seconds — defensive action expected, not attacking.
-  const justStoleFromOpposition = (() => {
-    if (!actionFor || !actionHasPossession) return false;
-    const evs = s.match.events;
-    let foundCurrent = false;
-    for (let i = evs.length - 1; i >= 0; i--) {
-      const e = evs[i];
-      if (e.type !== "possession") continue;
-      if (!foundCurrent) {
-        if (e.side === actionFor.side && e.position === actionFor.position) {
-          // Must be recent (within 6 seconds) to be a "just stole" event
-          if (Date.now() - (e as any).t > 6000) return false;
-          foundCurrent = true;
-          continue;
-        }
-        return false;
-      }
-      return e.side !== actionFor.side;
-    }
-    return false;
-  })();
-
-  const actionPlayerStats = actionFor
-    ? (actionFor.side === "lhc"
-        ? derived.lhc.byPosition[actionFor.position]
-        : derived.opp.byPosition[actionFor.position])
-    : undefined;
 
   // POM lookup for the goal toast (LHC only)
   const lastGoalPlayerName = derived.lastGoal && derived.lastGoal.side === "lhc"
@@ -268,7 +228,11 @@ export default function Page() {
               ? `${derived.pendingCentrePass === "lhc" ? s.match.lhcName : s.match.oppName} to take centre pass`
               : undefined
           }
+          pickMode={pickMode}
+          onCancelPick={() => setPickMode(null)}
           onAction={(kind) => {
+            if (kind === "intercept_pick") { setPickMode("intercept"); return; }
+            if (kind === "deflection_pick") { setPickMode("deflection"); return; }
             if (!currentPossession) return;
             const { side, position } = currentPossession;
             if (kind === "goal") s.logShot(side, position, true);
@@ -281,29 +245,11 @@ export default function Page() {
 
       <footer className="border-t border-gold/30 bg-navy py-2 px-3 text-[10px] uppercase tracking-widest text-cream/50 text-center">
         {s.match.running ? (
-          <div className="grid grid-cols-2 gap-2">
-            <div><span className="text-gold font-bold">TAP</span> = they have the ball</div>
-            <div><span className="text-gold font-bold">QUICK BAR</span> ↓ = log action</div>
-          </div>
+          <div><span className="text-gold font-bold">TAP</span> a player to log possession · use the <span className="text-gold font-bold">QUICK BAR</span> for actions</div>
         ) : (
           <div className="text-red-300">⏸ Paused — tap <span className="text-emerald-300 font-bold">START</span> in the top bar</div>
         )}
       </footer>
-
-      {actionFor && (
-        <ActionSheet
-          side={actionFor.side}
-          position={actionFor.position}
-          playerName={actionPlayerName}
-          teamName={actionTeamName || ""}
-          isTracked={actionFor.side === "lhc"}
-          hasPossession={actionHasPossession}
-          justStoleFromOpposition={justStoleFromOpposition}
-          playerStats={actionPlayerStats}
-          onPick={handleAction}
-          onClose={() => setActionFor(null)}
-        />
-      )}
 
       {fixOpen && (
         <FixSheet match={s.match} onRemove={s.removeEvent} onClose={() => setFixOpen(false)} />
