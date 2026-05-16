@@ -61,7 +61,7 @@ export function PositionGrid({
           )}
         </div>
       </button>
-      <div className="grid grid-cols-7 gap-1.5 pt-1 px-0.5">
+      <div className="grid grid-cols-7 gap-1.5 pt-2 px-1.5 pb-1">
         {order.map((p) => {
           const isActive = currentPossession?.side === side && currentPossession?.position === p;
           const name = lineup?.[p];
@@ -133,8 +133,8 @@ function Btn({
 
   const baseClass = isTracked ? "bg-navy border-gold/40 text-gold" : "bg-navy border-red-400/40 text-red-300";
   const activeClass = isTracked
-    ? "bg-gold text-navy-dark border-gold scale-110 z-10 shadow-lg shadow-gold/40"
-    : "bg-red-500 text-white border-red-300 scale-110 z-10 shadow-lg shadow-red-500/40";
+    ? "bg-gold text-navy-dark border-gold ring-4 ring-gold/50 shadow-lg shadow-gold/40 z-10"
+    : "bg-red-500 text-white border-red-300 ring-4 ring-red-400/50 shadow-lg shadow-red-500/40 z-10";
 
   return (
     <button
