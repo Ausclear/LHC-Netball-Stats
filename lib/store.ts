@@ -267,12 +267,40 @@ export function useStore() {
   }, []);
 
   const logTurnoverLost = useCallback((side: Side, position: Position) => {
-    appendEvent({ type: "turnover_lost", side, position } as any);
-  }, [appendEvent]);
+    // Losing the ball transfers possession to the opposition. Log the
+    // turnover, then auto-log a possession for the same position on the
+    // other side as a sensible default — the user can re-tap the actual
+    // player if they want to be more precise.
+    setMatch((prev) => {
+      if (!prev) return prev;
+      const now = Date.now();
+      const otherSide: Side = side === "lhc" ? "opp" : "lhc";
+      const events: GameEvent[] = [
+        ...prev.events,
+        { id: uid(), t: now, q: prev.currentQuarter, type: "turnover_lost", side, position },
+        { id: uid(), t: now + 1, q: prev.currentQuarter, type: "possession", side: otherSide, position },
+      ];
+      return { ...prev, events };
+    });
+  }, []);
 
   const logPenalty = useCallback((side: Side, position: Position) => {
-    appendEvent({ type: "penalty", side, position } as any);
-  }, [appendEvent]);
+    // In netball, a penalty pass gives the ball to the offended team.
+    // So a penalty AGAINST `side` means the OTHER side gets the ball at
+    // roughly the same position. Log the penalty, then auto-log a
+    // possession for the opposition's player at the same position.
+    setMatch((prev) => {
+      if (!prev) return prev;
+      const now = Date.now();
+      const otherSide: Side = side === "lhc" ? "opp" : "lhc";
+      const events: GameEvent[] = [
+        ...prev.events,
+        { id: uid(), t: now, q: prev.currentQuarter, type: "penalty", side, position },
+        { id: uid(), t: now + 1, q: prev.currentQuarter, type: "possession", side: otherSide, position },
+      ];
+      return { ...prev, events };
+    });
+  }, []);
 
   // ----------------------------------------------------------------
   // Match metadata setters

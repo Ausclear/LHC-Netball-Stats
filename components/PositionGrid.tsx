@@ -74,6 +74,7 @@ export function PositionGrid({
           // The C card on the team that owns a pending centre pass should
           // pulse to show whose turn it is — the centre always takes it.
           const isPendingCp = pendingCentrePass && p === "C";
+          const penalties = stats.byPosition[p].penalties;
           return (
             <Btn
               key={p}
@@ -89,6 +90,7 @@ export function PositionGrid({
               possessionMs={ms}
               shotsMade={shotsMade}
               intercepts={intercepts}
+              penalties={penalties}
               onTap={() => onTap(side, p)}
               onDoubleTap={() => onDoubleTap(side, p)}
             />
@@ -101,11 +103,11 @@ export function PositionGrid({
 
 function Btn({
   position, playerName, isActive, isTracked, isLive, isShooter, isCaptain, isCpTaker, isPendingCp,
-  possessionMs, shotsMade, intercepts, onTap, onDoubleTap,
+  possessionMs, shotsMade, intercepts, penalties, onTap, onDoubleTap,
 }: {
   position: Position; playerName?: string; isActive: boolean; isTracked: boolean;
   isLive: boolean; isShooter: boolean; isCaptain: boolean; isCpTaker: boolean; isPendingCp: boolean;
-  possessionMs: number; shotsMade: number; intercepts: number;
+  possessionMs: number; shotsMade: number; intercepts: number; penalties: number;
   onTap: () => void; onDoubleTap: () => void;
 }) {
   const lastTapAt = useRef(0);
@@ -168,6 +170,11 @@ function Btn({
       {intercepts > 0 && (
         <span className="absolute -bottom-1.5 -left-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-emerald-500 text-emerald-950 ring-2 ring-navy-dark">
           {intercepts}
+        </span>
+      )}
+      {penalties > 0 && (
+        <span className="absolute -bottom-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-rose-500 text-white ring-2 ring-navy-dark">
+          {penalties}
         </span>
       )}
       {isCaptain && (
