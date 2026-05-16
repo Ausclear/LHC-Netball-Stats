@@ -205,49 +205,182 @@ function PlayersTab({ match, derived }: { match: MatchState; derived: Derived })
       const name = match.lineup[p];
       if (!name) continue;
       const k = name.toLowerCase();
-      if (!map[k]) map[k] = { name, positions: [p], possessionMs: 0, shotsMade: 0, shotsMissed: 0, intercepts: 0, deflections: 0, turnoversLost: 0, penalties: 0 };
+      if (!map[k]) map[k] = { name, positions: [p], possessionMs: 0, passes: 0, shotsMade: 0, shotsMissed: 0, intercepts: 0, deflections: 0, turnoversLost: 0, penalties: 0 };
       else if (!map[k].positions.includes(p)) map[k].positions.push(p);
     }
     for (const p of Object.values(derived.lhc.byPlayer)) {
       const k = p.name.toLowerCase();
-      map[k] = { ...p };
+      const existing = map[k];
+      // Keep all positions from the lineup loop, take stats from byPlayer
+      map[k] = {
+        ...p,
+        positions: existing ? Array.from(new Set([...existing.positions, ...p.positions])) : p.positions,
+      };
     }
     return Object.values(map).sort((a: any, b: any) => b.possessionMs - a.possessionMs);
   }, [match.lineup, derived]);
 
+  const lhcByPos = (["GS","GA","WA","C","WD","GD","GK"] as Position[]).map((p) => ({
+    p, name: match.lineup[p] || "—", line: derived.lhc.byPosition[p],
+  }));
+  const oppByPos = (["GS","GA","WA","C","WD","GD","GK"] as Position[]).map((p) => ({
+    p, line: derived.opp.byPosition[p],
+  }));
+
   return (
-    <Card title={`${match.lhcName} — By Player`}>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-[9px] uppercase tracking-widest text-gold/70">
-              <th className="text-left py-1">Player</th>
-              <th className="text-left">Pos</th>
-              <th className="text-right">Poss</th>
-              <th className="text-right">INT</th>
-              <th className="text-right">DEF</th>
-              <th className="text-right">TO</th>
-              <th className="text-right">PEN</th>
-              <th className="text-right">Sh</th>
-            </tr>
-          </thead>
-          <tbody>
-            {players.map((p: any) => (
-              <tr key={p.name} className="border-t border-white/5">
-                <td className="py-1.5 font-bold text-gold">{p.name}</td>
-                <td className="text-cream/60 text-[10px]">{p.positions.join(", ")}</td>
-                <td className="text-right font-mono tabular-nums">{fmtMs(p.possessionMs)}</td>
-                <td className="text-right font-mono tabular-nums text-emerald-300">{p.intercepts || ""}</td>
-                <td className="text-right font-mono tabular-nums text-teal-300">{p.deflections || ""}</td>
-                <td className="text-right font-mono tabular-nums text-amber-300/80">{p.turnoversLost || ""}</td>
-                <td className="text-right font-mono tabular-nums text-rose-300/80">{p.penalties || ""}</td>
-                <td className="text-right font-mono tabular-nums">{p.shotsMade + p.shotsMissed > 0 ? `${p.shotsMade}/${p.shotsMade + p.shotsMissed}` : "—"}</td>
+    <>
+      <Card title={`${match.lhcName} — By Player`}>
+        <div className="overflow-x-auto -mx-3 px-3">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[9px] uppercase tracking-widest text-gold/70">
+                <th className="text-left py-1">Player</th>
+                <th className="text-left">Pos</th>
+                <th className="text-right">Poss</th>
+                <th className="text-right">Pass</th>
+                <th className="text-right">INT</th>
+                <th className="text-right">DEF</th>
+                <th className="text-right">TO</th>
+                <th className="text-right">PEN</th>
+                <th className="text-right">Shots</th>
+                <th className="text-right">Sh%</th>
+                <th className="text-right">POM</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {players.map((p: any) => {
+                const attempts = p.shotsMade + p.shotsMissed;
+                const shPct = attempts > 0 ? Math.round((p.shotsMade / attempts) * 100) : null;
+                return (
+                  <tr key={p.name} className="border-t border-white/5">
+                    <td className="py-1.5 font-bold text-gold whitespace-nowrap">{p.name}</td>
+                    <td className="text-cream/60 text-[10px] whitespace-nowrap">{p.positions.join(", ")}</td>
+                    <td className="text-right font-mono tabular-nums">{fmtMs(p.possessionMs)}</td>
+                    <td className="text-right font-mono tabular-nums text-cream/80">{p.passes || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-emerald-300">{p.intercepts || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-teal-300">{p.deflections || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-amber-300/80">{p.turnoversLost || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-rose-300/80">{p.penalties || ""}</td>
+                    <td className="text-right font-mono tabular-nums">{attempts > 0 ? `${p.shotsMade}/${attempts}` : "—"}</td>
+                    <td className="text-right font-mono tabular-nums">{shPct !== null ? `${shPct}%` : "—"}</td>
+                    <td className="text-right font-mono tabular-nums text-gold">{pomScore(p).toFixed(1)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="text-[9px] text-cream/40 mt-2">
+          Poss = possession time · Pass = balls delivered · INT = intercepts · DEF = deflections · TO = turnovers lost · PEN = penalties · Sh% = shooting accuracy · POM = player-of-match score
+        </div>
+      </Card>
+
+      <Card title={`${match.lhcName} — By Position`}>
+        <div className="overflow-x-auto -mx-3 px-3">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[9px] uppercase tracking-widest text-gold/70">
+                <th className="text-left py-1">Pos</th>
+                <th className="text-left">Player</th>
+                <th className="text-right">Poss</th>
+                <th className="text-right">Pass</th>
+                <th className="text-right">INT</th>
+                <th className="text-right">DEF</th>
+                <th className="text-right">TO</th>
+                <th className="text-right">PEN</th>
+                <th className="text-right">Shots</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lhcByPos.map(({ p, name, line }) => {
+                const attempts = line.shotsMade + line.shotsMissed;
+                return (
+                  <tr key={p} className="border-t border-white/5">
+                    <td className="py-1.5 font-display tracking-wider text-gold">{p}</td>
+                    <td className="text-cream/80 whitespace-nowrap">{name}</td>
+                    <td className="text-right font-mono tabular-nums">{fmtMs(line.possessionMs)}</td>
+                    <td className="text-right font-mono tabular-nums text-cream/80">{line.passes || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-emerald-300">{line.intercepts || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-teal-300">{line.deflections || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-amber-300/80">{line.turnoversLost || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-rose-300/80">{line.penalties || ""}</td>
+                    <td className="text-right font-mono tabular-nums">{attempts > 0 ? `${line.shotsMade}/${attempts}` : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card title={`${match.oppName} — By Position`}>
+        <div className="overflow-x-auto -mx-3 px-3">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[9px] uppercase tracking-widest text-red-300/70">
+                <th className="text-left py-1">Pos</th>
+                <th className="text-right">Poss</th>
+                <th className="text-right">Pass</th>
+                <th className="text-right">INT</th>
+                <th className="text-right">DEF</th>
+                <th className="text-right">TO</th>
+                <th className="text-right">PEN</th>
+                <th className="text-right">Shots</th>
+              </tr>
+            </thead>
+            <tbody>
+              {oppByPos.map(({ p, line }) => {
+                const attempts = line.shotsMade + line.shotsMissed;
+                return (
+                  <tr key={p} className="border-t border-white/5">
+                    <td className="py-1.5 font-display tracking-wider text-red-300">{p}</td>
+                    <td className="text-right font-mono tabular-nums">{fmtMs(line.possessionMs)}</td>
+                    <td className="text-right font-mono tabular-nums text-cream/80">{line.passes || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-emerald-300">{line.intercepts || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-teal-300">{line.deflections || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-amber-300/80">{line.turnoversLost || ""}</td>
+                    <td className="text-right font-mono tabular-nums text-rose-300/80">{line.penalties || ""}</td>
+                    <td className="text-right font-mono tabular-nums">{attempts > 0 ? `${line.shotsMade}/${attempts}` : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card title="Team Totals">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+          <TotRow label="Goals" lhc={derived.lhc.goals} opp={derived.opp.goals} />
+          <TotRow label="Shots Attempted" lhc={derived.lhc.shotsAttempted} opp={derived.opp.shotsAttempted} />
+          <TotRow label="Shooting %"
+            lhc={derived.lhc.shotsAttempted > 0 ? `${Math.round(derived.lhc.goals / derived.lhc.shotsAttempted * 100)}%` : "—"}
+            opp={derived.opp.shotsAttempted > 0 ? `${Math.round(derived.opp.goals / derived.opp.shotsAttempted * 100)}%` : "—"} />
+          <TotRow label="Intercepts" lhc={derived.lhc.intercepts} opp={derived.opp.intercepts} />
+          <TotRow label="Deflections" lhc={derived.lhc.deflections} opp={derived.opp.deflections} />
+          <TotRow label="Turnovers Won" lhc={derived.lhc.turnoversWon} opp={derived.opp.turnoversWon} />
+          <TotRow label="Turnovers Lost" lhc={derived.lhc.turnoversLost} opp={derived.opp.turnoversLost} />
+          <TotRow label="Penalties" lhc={derived.lhc.penalties} opp={derived.opp.penalties} />
+          <TotRow label="Possession" lhc={fmtMs(derived.lhc.possessionMs)} opp={fmtMs(derived.opp.possessionMs)} />
+          <TotRow label="Centre Passes" lhc={derived.lhc.centrePasses} opp={derived.opp.centrePasses} />
+        </div>
+      </Card>
+    </>
+  );
+}
+
+function TotRow({ label, lhc, opp }: { label: string; lhc: string | number; opp: string | number }) {
+  return (
+    <>
+      <div className="flex items-center justify-between border-b border-white/5 pb-1">
+        <span className="text-[10px] uppercase tracking-widest text-cream/50">{label}</span>
+        <span className="font-mono tabular-nums font-bold text-gold">{lhc}</span>
       </div>
-    </Card>
+      <div className="flex items-center justify-between border-b border-white/5 pb-1">
+        <span className="text-[10px] uppercase tracking-widest text-cream/50">{label}</span>
+        <span className="font-mono tabular-nums font-bold text-red-300">{opp}</span>
+      </div>
+    </>
   );
 }
 
